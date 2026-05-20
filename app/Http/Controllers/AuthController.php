@@ -8,7 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\RateLimiter;
 use Carbon\Carbon;
 
 class AuthController extends Controller
@@ -69,25 +68,13 @@ class AuthController extends Controller
         $identifier = $request->string('identifier')->toString();
         $password = $request->string('password')->toString();
 
-        $throttleKey = Str::lower($identifier) . '|' . $request->ip();
-        $maxAttempts = 5;
-        $decaySeconds = 60;
-
-        if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
-            $seconds = RateLimiter::availableIn($throttleKey);
-            return response()->json(['message' => 'Too many login attempts. Try again later.', 'retry_after' => $seconds], 429);
-        }
-
         $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
             ? User::where('email', $identifier)->first()
             : User::where('nickname', $identifier)->first();
 
         if (!$user || !Hash::check($password, $user->password)) {
-            RateLimiter::hit($throttleKey, $decaySeconds);
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
-
-        RateLimiter::clear($throttleKey);
         if (method_exists($user, 'tokens')) {
             $maxTokens = 5;
             $expiryDays = 30;
