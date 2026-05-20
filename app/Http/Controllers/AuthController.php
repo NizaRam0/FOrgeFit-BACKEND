@@ -8,13 +8,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\RateLimiter;
+use Carbon\Carbon;
 
 class AuthController extends Controller
 {
     public function register(Request $request)
     {
         $v = Validator::make($request->all(), [
-            'nickname' => 'required|string|max:50',
+            'nickname' => 'required|string|max:50|unique:users,nickname',
             'name' => 'sometimes|nullable|string|max:100',
             'email' => 'required|email|unique:users',
             'password' => 'required|min:8',
@@ -46,7 +48,9 @@ class AuthController extends Controller
 
         $user = User::create(array_merge($base, $optional));
 
-        $token = $user->createToken('mobile')->plainTextToken;
+        // create a mobile token that expires in 30 days
+        $expires = Carbon::now()->addDays(30);
+        $token = $user->createToken('mobile', ['*'], $expires)->plainTextToken;
 
         return response()->json(['data' => ['user' => new UserResource($user), 'token' => $token], 'message' => 'Registration successful'], 201);
     }
@@ -69,19 +73,55 @@ class AuthController extends Controller
             ? ['email' => $identifier, 'password' => $password]
             : ['nickname' => $identifier, 'password' => $password];
 
+        $throttleKey = Str::lower($identifier) . '|' . $request->ip();
+        $maxAttempts = 5;
+        $decaySeconds = 60;
+
+        if (RateLimiter::tooManyAttempts($throttleKey, $maxAttempts)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return response()->json(['message' => 'Too many login attempts. Try again later.', 'retry_after' => $seconds], 429);
+        }
+
         if (!auth()->attempt($credentials)) {
+            RateLimiter::hit($throttleKey, $decaySeconds);
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $user = auth()->user();
-        $token = $user->createToken('mobile')->plainTextToken;
+        RateLimiter::clear($throttleKey);
 
-        return response()->json(['data' => ['user' => new UserResource($user),'token'=>$token], 'message' => 'Login successful']);
+        $user = auth()->user();
+        if (method_exists($user, 'tokens')) {
+            $maxTokens = 5;
+            $expiryDays = 30;
+            $cutoff = Carbon::now()->subDays($expiryDays);
+
+            // remove tokens older than expiry window
+            $user->tokens()->where('name', 'mobile')->where('created_at', '<', $cutoff)->delete();
+
+            // if too many tokens remain, delete oldest to make room
+            $tokens = $user->tokens()->where('name', 'mobile')->orderBy('created_at', 'asc')->get();
+            if ($tokens->count() >= $maxTokens) {
+                $deleteCount = $tokens->count() - ($maxTokens - 1);
+                $idsToDelete = $tokens->take($deleteCount)->pluck('id')->all();
+                if (!empty($idsToDelete)) {
+                    $user->tokens()->whereIn('id', $idsToDelete)->delete();
+                }
+            }
+        }
+
+        $expires = Carbon::now()->addDays(30);
+        $token = $user->createToken('mobile', ['*'], $expires)->plainTextToken;
+
+        return response()->json(['data' => ['user' => new UserResource($user), 'token' => $token], 'message' => 'Login successful']);
     }
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+        if ($token) {
+            $token->delete();
+        }
+
         return response()->json(['message' => 'Logged out']);
     }
 
@@ -120,10 +160,7 @@ class AuthController extends Controller
             $data['password'] = Hash::make($data['password']);
         }
 
-        if (!array_key_exists('profile_complete', $data)) {
-            $data['profile_complete'] = true;
-        }
-
+        // Only update profile_complete if it's explicitly provided by the client.
         $user->update($data);
 
         return response()->json(['data'=>['user'=>new UserResource($user)], 'message'=>'Profile updated']);

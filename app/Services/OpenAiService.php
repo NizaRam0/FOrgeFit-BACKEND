@@ -217,20 +217,19 @@ while (isset($dateSet[$cursor->toDateString()])) {
             ]);
 
             $content = $resp->choices[0]->message->content ?? '';
-            
+
             Log::info('AI Generate Plan Raw Response', [
                 'user_id' => $user->id,
                 'content_length' => strlen($content),
                 'content_preview' => substr($content, 0, 200),
             ]);
 
-            // Force JSON: try decode
+            // Force JSON: try decode. If the model returns surrounding text, try to extract a balanced JSON block.
             $json = json_decode($content, true);
             if (json_last_error() !== JSON_ERROR_NONE) {
-                // try to extract JSON substring
-                preg_match('/(\{.*\})/s', $content, $m);
-                if (isset($m[1])) {
-                    $json = json_decode($m[1], true);
+                $maybe = $this->extractBalancedJson($content);
+                if ($maybe !== null) {
+                    $json = json_decode($maybe, true);
                 }
             }
 
@@ -350,5 +349,47 @@ while (isset($dateSet[$cursor->toDateString()])) {
         } catch (\Throwable $e) {
             throw $e;
         }
+    }
+
+    private function extractBalancedJson(string $text): ?string
+    {
+        $len = strlen($text);
+        $start = null;
+        $open = null;
+        for ($i = 0; $i < $len; $i++) {
+            $ch = $text[$i];
+            if ($ch === '{' || $ch === '[') {
+                $start = $i;
+                $open = $ch;
+                break;
+            }
+        }
+
+        if ($start === null) {
+            return null;
+        }
+
+        $pairs = ['{' => '}', '[' => ']'];
+        $stack = [];
+        for ($i = $start; $i < $len; $i++) {
+            $ch = $text[$i];
+            if ($ch === '{' || $ch === '[') {
+                array_push($stack, $ch);
+            } elseif ($ch === '}' || $ch === ']') {
+                if (empty($stack)) {
+                    return null;
+                }
+                $last = array_pop($stack);
+                if ($pairs[$last] !== $ch) {
+                    // mismatched brackets
+                    return null;
+                }
+                if (empty($stack)) {
+                    return substr($text, $start, $i - $start + 1);
+                }
+            }
+        }
+
+        return null;
     }
 }

@@ -29,7 +29,11 @@ class TemplateController extends Controller
             'description' => 'sometimes|string|nullable',
             'is_ai_generated' => 'sometimes|boolean',
             'muscle_groups' => 'required|array|min:1',
-            'exercises' => 'required|array|min:1'
+            'exercises' => 'required|array|min:1',
+            'exercises.*.exercise_id' => 'required|string',
+            'exercises.*.sets' => 'required|integer|min:1',
+            'exercises.*.target_reps' => 'required|integer|min:1',
+            'exercises.*.sort_order' => 'sometimes|integer'
         ]);
 
         if ($v->fails()) {

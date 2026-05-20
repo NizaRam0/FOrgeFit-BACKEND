@@ -32,7 +32,14 @@ class LogController extends Controller
             'duration_seconds' => 'required|integer|min:0',
             'notes' => 'sometimes|string|nullable',
             'muscle_groups' => 'required|array',
-            'exercises' => 'required|array|min:1'
+            'exercises' => 'required|array|min:1',
+            'exercises.*.exercise_id' => 'sometimes|nullable|string',
+            'exercises.*.exercise_name' => 'required|string',
+            'exercises.*.muscle_group' => 'required|string',
+            'exercises.*.sets' => 'required|array|min:1',
+            'exercises.*.sets.*.weight' => 'required|numeric',
+            'exercises.*.sets.*.reps' => 'required|integer',
+            'exercises.*.sets.*.completed' => 'sometimes|boolean'
         ]);
 
         if ($v->fails()) return response()->json(['message'=>'Validation failed','errors'=>$v->errors()],422);

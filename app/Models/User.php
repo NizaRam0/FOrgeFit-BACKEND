@@ -24,6 +24,22 @@ class User extends Authenticatable
 
     protected $hidden = ['password','remember_token'];
 
+    public function getAvailableEquipmentAttribute($value)
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        if (is_string($value) && $value !== '') {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return $value;
+    }
+
     public function workoutTemplates()
     {
         return $this->hasMany(WorkoutTemplate::class);
