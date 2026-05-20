@@ -69,10 +69,6 @@ class AuthController extends Controller
         $identifier = $request->string('identifier')->toString();
         $password = $request->string('password')->toString();
 
-        $credentials = filter_var($identifier, FILTER_VALIDATE_EMAIL)
-            ? ['email' => $identifier, 'password' => $password]
-            : ['nickname' => $identifier, 'password' => $password];
-
         $throttleKey = Str::lower($identifier) . '|' . $request->ip();
         $maxAttempts = 5;
         $decaySeconds = 60;
@@ -82,14 +78,16 @@ class AuthController extends Controller
             return response()->json(['message' => 'Too many login attempts. Try again later.', 'retry_after' => $seconds], 429);
         }
 
-        if (!auth()->attempt($credentials)) {
+        $user = filter_var($identifier, FILTER_VALIDATE_EMAIL)
+            ? User::where('email', $identifier)->first()
+            : User::where('nickname', $identifier)->first();
+
+        if (!$user || !Hash::check($password, $user->password)) {
             RateLimiter::hit($throttleKey, $decaySeconds);
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
         RateLimiter::clear($throttleKey);
-
-        $user = auth()->user();
         if (method_exists($user, 'tokens')) {
             $maxTokens = 5;
             $expiryDays = 30;
