@@ -15,23 +15,32 @@ class UserSeeder extends Seeder
         // -----------------------------------------------------------------
         // 1. Test user account (complete profile, ready to use immediately)
         // -----------------------------------------------------------------
-        $userId = DB::table('users')->insertGetId([
-            'name'                => 'Nizar Ramadan',
-            'nickname'            => 'NizaRam0',
-            'email'               => 'test@forgefit.com',
-            'password'            => Hash::make('password'),
-            'gender'              => 'male',
-            'age'                 => 22,
-            'weight_kg'           => 78.50,
-            'height_cm'           => 179.00,
-            'goal'                => 'Build Muscle',
-            'fitness_level'       => 'Intermediate',
-            'available_equipment' => json_encode(['barbell', 'dumbbells', 'bench', 'pull-up bar', 'cables']),
-            'workouts_per_week'   => 4,
-            'profile_complete'    => true,
-            'created_at'          => now(),
-            'updated_at'          => now(),
-        ]);
+        $existing = DB::table('users')->where('email', 'test@forgefit.com')->first();
+
+        if ($existing) {
+            // Wipe previous seed data so we can re-seed cleanly
+            DB::table('workout_logs')->where('user_id', $existing->id)->delete();
+            DB::table('workout_templates')->where('user_id', $existing->id)->delete();
+            $userId = $existing->id;
+        } else {
+            $userId = DB::table('users')->insertGetId([
+                'name'                => 'Nizar Ramadan',
+                'nickname'            => 'NizaRam0',
+                'email'               => 'test@forgefit.com',
+                'password'            => Hash::make('password'),
+                'gender'              => 'male',
+                'age'                 => 22,
+                'weight_kg'           => 78.50,
+                'height_cm'           => 179.00,
+                'goal'                => 'Build Muscle',
+                'fitness_level'       => 'Intermediate',
+                'available_equipment' => json_encode(['barbell', 'dumbbells', 'bench', 'pull-up bar', 'cables']),
+                'workouts_per_week'   => 4,
+                'profile_complete'    => true,
+                'created_at'          => now(),
+                'updated_at'          => now(),
+            ]);
+        }
 
         // -----------------------------------------------------------------
         // 2. Pull seeded exercise IDs by name for easy reference
