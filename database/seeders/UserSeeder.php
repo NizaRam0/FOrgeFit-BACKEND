@@ -15,7 +15,7 @@ class UserSeeder extends Seeder
         // -----------------------------------------------------------------
         // 1. Test user account (complete profile, ready to use immediately)
         // -----------------------------------------------------------------
-        $existing = DB::table('users')->where('email', 'test@forgefit.com')->first();
+        $existing = DB::table('users')->where('email', 'test@gmail.com')->first();
 
         if ($existing) {
             // Wipe previous seed data so we can re-seed cleanly
@@ -26,7 +26,7 @@ class UserSeeder extends Seeder
             $userId = DB::table('users')->insertGetId([
                 'name'                => 'Nizar Ramadan',
                 'nickname'            => 'NizaRam0',
-                'email'               => 'test@forgefit.com',
+                'email'               => 'test@gmail.com',
                 'password'            => Hash::make('password'),
                 'gender'              => 'male',
                 'age'                 => 22,
